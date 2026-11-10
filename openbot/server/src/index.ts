@@ -1,3 +1,4 @@
+import { stopAcpRuns } from "./agents/acp-agent";
 // First, before anything that imports the CopilotKit runtime: see telemetry.ts.
 import "./telemetry";
 import type { AbstractAgent } from "@ag-ui/client";
@@ -2834,6 +2835,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     groupSweep.stop();
     for (const sweep of deliverySweeps) sweep.stop();
     void Promise.allSettled([
+      stopAcpRuns(),
       channelActivityListener.stop(),
       policyListener.stop(),
       // Started only where handing work between Bots is switched on, so it is often not there.

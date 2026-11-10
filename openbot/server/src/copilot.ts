@@ -1,3 +1,7 @@
+import "./telemetry";
+import { AcpAgent } from "./agents/acp-agent";
+import { acpSettings, type AcpSettings } from "./agents/acp-config";
+import { isManagedEndpoint } from "./agents/managed-endpoint";
 import type { Message, RunAgentInput } from "@ag-ui/client";
 import { type AbstractAgent, HttpAgent } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
@@ -44,7 +48,6 @@ import {
 import type { AgentFetch, StallGuard } from "./channels/stall-guard";
 import type { DeploymentConfig } from "./config";
 import { observeModelConnection } from "./desktop-connection-failure";
-import { desktopTelemetryProperties } from "./desktop-telemetry";
 import { observeIntelligenceAuthentication } from "./intelligence-client";
 import { RemoteLearnedSkillsMiddleware } from "./learning/remote";
 import {
@@ -74,7 +77,6 @@ import {
   selectTools,
 } from "./plugins/selection";
 import { grantedToolGuidance } from "./plugins/tools";
-import { runtimeTelemetryProperties } from "./telemetry";
 import { UNTRUSTED_GUIDANCE } from "./untrusted-content";
 
 /**
@@ -195,6 +197,7 @@ export type RuntimeModel = {
   provider: "openai" | "anthropic";
   defaultModel: string;
   plan?: PlanModelConfig;
+  acp?: AcpSettings;
 };
 
 /** Optional desktop environment values may be present but blank; SDKs treat them as URLs. */
@@ -231,6 +234,7 @@ export function runtimeModelForEnvironment(
   packageModel: RuntimeModel,
   environment: Record<string, string | undefined> = process.env,
 ): RuntimeModel {
+  const acp = acpSettings(environment);
   const selectedModel = environment.BOT_MODEL?.trim();
   const selectedProvider = environment.BOT_PROVIDER?.trim().toLowerCase();
   // The desktop writes an empty provider when switching back to OpenAI. An absent
@@ -253,7 +257,8 @@ export function runtimeModelForEnvironment(
       !!environment.OPENAI_BASE_URL?.trim());
   return {
     provider,
-    plan: planModelForEnvironment(environment),
+    acp,
+    plan: acp ? undefined : planModelForEnvironment(environment),
     defaultModel:
       selectedModelApplies && selectedModel ? selectedModel : defaultModel,
   };
@@ -401,7 +406,7 @@ export function builtInAgentConfiguration(
   planModel?: PlanModel,
   learnedSkills?: LearnedSkillInvocation,
 ): BuiltInAgentConfiguration {
-  if (!apiKey && !planModel) {
+  if (!apiKey && !planModel && !model.acp) {
     return {
       type: "custom",
       // biome-ignore lint/correctness/useYield: this agent must fail when iteration starts.
@@ -896,6 +901,18 @@ async function buildAgent(
     return new UnavailableAgent(agent);
   }
 
+  if (
+    model.acp &&
+    agent.type === "remote_ag_ui" &&
+    isManagedEndpoint(agent.endpoint, [model.acp.managedEndpoint])
+  ) {
+    agent = {
+      id: agent.id,
+      name: agent.name,
+      type: "built_in",
+      systemPrompt: agent.standingMessage.content,
+    };
+  }
   const granted = await loadTools(agent.id);
 
   /*
@@ -920,6 +937,7 @@ async function buildAgent(
     }
   }
   const narrowing =
+    !model.acp &&
     selection &&
     skills.some((skill) => skill.tools.length > 0) &&
     granted.length > (selection.floor ?? SELECTION_FLOOR)
@@ -1007,44 +1025,64 @@ async function buildAgent(
     input?: RunAgentInput,
     signal?: AbortSignal,
     learnedSkills?: LearnedSkillInvocation,
-  ) =>
-    new BuiltInAgentWithSaneHistory(
-      builtInAgentConfiguration(
-        agent,
-        model,
-        apiKey,
-        tools,
-        computerGuidance,
-        connectedVendors,
-        standingInstructions,
-        model.plan && input
-          ? new PlanModel(
-              model.plan,
-              agent.id,
-              input,
-              new Set(input.tools.map((tool) => tool.name)),
-              signal,
-            )
-          : undefined,
-        learnedSkills,
-      ),
-      {
-        // The run's own events also tell the reply-chips guard what was written before each call.
-        observe: (run) => observeModelConnection(watchReplyTurn(run)),
-        ...(loadAttachment
-          ? {
-              inline: (messages: AgentRunInput["messages"], threadId: string) =>
-                inlineAttachments(
-                  messages,
-                  loadAttachment,
-                  threadId,
-                  markAttachmentsSent,
-                ),
-            }
-          : {}),
-      },
+  ) => {
+    const configuration = builtInAgentConfiguration(
+      agent,
+      model,
+      apiKey,
+      tools,
+      computerGuidance,
+      connectedVendors,
+      standingInstructions,
+      model.plan && input
+        ? new PlanModel(
+            model.plan,
+            agent.id,
+            input,
+            new Set(input.tools.map((tool) => tool.name)),
+            signal,
+          )
+        : undefined,
+      learnedSkills,
     );
-
+    if (model.acp) {
+      return new AcpAgent(model.acp, {
+        agentId: agent.id,
+        model: model.acp.acpModel ?? "default",
+        maxSteps: TOOL_STEPS,
+        prompt:
+          "prompt" in configuration
+            ? (configuration.prompt ?? agent.systemPrompt)
+            : agent.systemPrompt,
+        tools: "tools" in configuration ? (configuration.tools ?? []) : [],
+        observe: (events) => observeModelConnection(watchReplyTurn(events)),
+        inline: loadAttachment
+          ? (messages, threadId) =>
+              inlineAttachments(
+                messages,
+                loadAttachment,
+                threadId,
+                markAttachmentsSent,
+              )
+          : undefined,
+      });
+    }
+    return new BuiltInAgentWithSaneHistory(configuration, {
+      // The run's own events also tell the reply-chips guard what was written before each call.
+      observe: (run) => observeModelConnection(watchReplyTurn(run)),
+      ...(loadAttachment
+        ? {
+            inline: (messages: AgentRunInput["messages"], threadId: string) =>
+              inlineAttachments(
+                messages,
+                loadAttachment,
+                threadId,
+                markAttachmentsSent,
+              ),
+          }
+        : {}),
+    });
+  };
   const whole = withTools(granted);
   if (!narrowing && !handoff && !model.plan && !acquireLearnedSkills)
     return whole;
@@ -1651,9 +1689,10 @@ export async function resolveRuntimeAgents(
   // what that means, exactly as it would have from a roster that did not contain it.
   if (registered.length === 0) return {};
 
-  const apiKey = registered.some((agent) => agent.type === "built_in")
-    ? await resolveModelApiKey()
-    : null;
+  const apiKey =
+    !model.acp && registered.some((agent) => agent.type === "built_in")
+      ? await resolveModelApiKey()
+      : null;
   return buildAgents(
     registered,
     model,
@@ -1823,10 +1862,7 @@ export function mountCopilotRuntime(
     licenseToken: intelligence.licenseToken,
     // Carried on the events the runtime already sends, so OpenDuet's traffic is separable from any
     // other deployment's. Adds no events of its own. See telemetry.ts.
-    telemetryProperties: {
-      ...runtimeTelemetryProperties(config.accessibility),
-      ...desktopTelemetryProperties(),
-    },
+    telemetryProperties: {},
     /*
      * What lets a Bot answer with an interface it wrote itself.
      *

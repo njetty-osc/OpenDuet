@@ -1,3 +1,14 @@
+x-privacy-env: &privacy-env
+  DO_NOT_TRACK: "1"
+  COPILOTKIT_TELEMETRY_DISABLED: "true"
+  MASTRA_TELEMETRY_DISABLED: "true"
+  SCARF_ANALYTICS: "false"
+  ANONYMIZED_TELEMETRY: "false"
+  CREWAI_TELEMETRY: "false"
+  CREWAI_TRACING_ENABLED: "false"
+  LANGCHAIN_TRACING_V2: "false"
+  LANGSMITH_TRACING: "false"
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -14,6 +25,7 @@ services:
     # belongs here. Everything else that needs the database is outside this file: the API server
     # runs on the host in local development and connects through the published port below.
     environment:
+      <<: *privacy-env
       POSTGRES_DB: openbot
       POSTGRES_USER: openbot
       POSTGRES_PASSWORD: openbot
@@ -66,6 +78,7 @@ services:
     # therefore one of the places that happens.
     command: ["bun", "scripts/migrate.ts"]
     environment:
+      <<: *privacy-env
       DATABASE_URL: postgres://openbot:openbot@postgres:5432/openbot
     depends_on:
       postgres:
@@ -98,6 +111,7 @@ services:
       - path: ./egress.env
         required: false
     environment:
+      <<: *privacy-env
       # The secret every caller must present. The container refuses to start without it.
       #
       # The default matches the one scripts/start.sh applies when .env leaves this blank, which
@@ -198,6 +212,7 @@ services:
       - path: ./egress.env
         required: false
     environment:
+      <<: *privacy-env
       PORT: "4300"
       # Shared with the API server. The Bot-level verb set is the boundary; this token keeps other
       # services on the network from calling those verbs.
@@ -276,6 +291,7 @@ services:
       - "127.0.0.1:${BOT_PORT:-4200}:4200"
       - "[::1]:${BOT_PORT:-4200}:4200"
     environment:
+      <<: *privacy-env
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       # Server sends this on every call to the managed Bot. It refuses to start without it.
       MANAGED_AGENT_TOKEN: ${MANAGED_AGENT_TOKEN:-}
@@ -315,6 +331,7 @@ services:
       - "127.0.0.1:${PICKED_HARNESS_PORT:-4202}:${PICKED_HARNESS_PORT:-4202}"
       - "[::1]:${PICKED_HARNESS_PORT:-4202}:${PICKED_HARNESS_PORT:-4202}"
     environment:
+      <<: *privacy-env
       # Every harness refuses without this; it is what makes the endpoint the server's alone.
       MANAGED_AGENT_TOKEN: ${MANAGED_AGENT_TOKEN:-}
       # Deployment-owned tools use the same signed callback as agent-langgraph.
@@ -359,6 +376,7 @@ services:
       - "127.0.0.1:${LANGGRAPH_PORT:-4201}:4201"
       - "[::1]:${LANGGRAPH_PORT:-4201}:4201"
     environment:
+      <<: *privacy-env
       # The selected provider reads its own key. Models requiring the Responses API use
       # BOT_RESPONSES_API instead of changing the streaming loop here.
       BOT_PROVIDER: ${BOT_PROVIDER:-openai}

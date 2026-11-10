@@ -312,12 +312,16 @@ fi
 SERVICES+=(agent-computer)
 # The managed coworker uses LangGraph. The separate legacy sample only accepts OpenAI keys,
 # so requiring it would prevent an Anthropic-only deployment from reaching its managed Bot.
-if [ "$BOT_PROVIDER" = "anthropic" ]; then
+if [ "$(setting OPENBOT_AGENT_MODE api)" = "acp" ]; then
+  info "  model: local ACP CLI (no API Bot containers)"
+elif [ "$BOT_PROVIDER" = "anthropic" ]; then
   info "  agent-bot: skipped for Anthropic (OpenAI-only sample)"
 else
   SERVICES+=(agent-bot)
 fi
-SERVICES+=(agent-langgraph)
+if [ "$(setting OPENBOT_AGENT_MODE api)" != "acp" ]; then
+  SERVICES+=(agent-langgraph)
+fi
 
 export SUPERVISOR_TOKEN COMPUTER_TOKEN WORKER_SHARED_SECRET
 export COMPUTER_PORT BOT_PORT LANGGRAPH_PORT SUPERVISOR_PORT
@@ -333,10 +337,12 @@ if ! docker compose run --rm --build migrate >"$LOGS/migrate.log" 2>&1; then
   exit 1
 fi
 wait_for "http://localhost:$COMPUTER_PORT/health" "agent-computer"
-if [ "$BOT_PROVIDER" != "anthropic" ]; then
+if [ "$(setting OPENBOT_AGENT_MODE api)" != "acp" ] && [ "$BOT_PROVIDER" != "anthropic" ]; then
   wait_for "http://localhost:$BOT_PORT/health" "agent-bot"
 fi
-wait_for "http://localhost:$LANGGRAPH_PORT/health" "agent-langgraph"
+if [ "$(setting OPENBOT_AGENT_MODE api)" != "acp" ]; then
+  wait_for "http://localhost:$LANGGRAPH_PORT/health" "agent-langgraph"
+fi
 
 for table in agent_profiles agent_preferences; do
   if ! docker compose exec -T postgres \

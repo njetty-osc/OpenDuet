@@ -18,9 +18,12 @@
 # image. Keep this version matched to `agent-computer/package.json`: bump both or neither.
 
 FROM node:24.18.1-bookworm-slim AS node-toolchain
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 AS bun-toolchain
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 FROM ubuntu:24.04 AS base
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 # The Bun image digest pins the amd64/arm64 release bytes, including if its tag changes.
 ARG PLAYWRIGHT_VERSION=1.62.1
@@ -46,6 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 
 FROM base AS deps
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 WORKDIR /src
 
@@ -80,6 +84,7 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
 
 
 FROM deps AS app-build
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 COPY app app
 COPY scripts scripts
@@ -93,6 +98,7 @@ RUN bun run --cwd app build
 
 
 FROM base AS runtime
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 # s6 rather than supervisord. The deciding difference is that s6 brings the container down when a
 # supervised process exits, which is what makes the platform restart it. supervisord stays alive and

@@ -260,6 +260,7 @@ export function createAuth(
   ];
 
   return betterAuth({
+    telemetry: { enabled: false },
     user: {
       additionalFields: {
         preferences: {

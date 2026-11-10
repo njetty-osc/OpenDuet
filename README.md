@@ -158,7 +158,7 @@ To run a second install beside another on one machine, give it its own `COMPOSE_
 
 To diagnose a 401, inspect container names and port mappings with `docker ps`, then compare `COMPUTER_TOKEN` by equality without printing either value. The setup checklist authenticates against the provider and checks network-policy delivery; a configured URL alone no longer means Ready. A sleeping computer reads Not checked until it is running and **Check again** succeeds.
 
-The CopilotKit runtime sends usage telemetry to CopilotKit, tagged OpenDuet. Set `COPILOTKIT_TELEMETRY_DISABLED=true` or `DO_NOT_TRACK=1` to turn it off. [What is sent](docs/telemetry.md).
+This fork removes desktop telemetry and external audit export, and disables vendor runtime analytics. [Privacy details](docs/telemetry.md). [Local ACP setup](docs/acp.md).
 
 Once it is running, try the parts that work today:
 
@@ -216,7 +216,7 @@ Copy the folder, change it, and point `TENANT_PACKAGE_DIR` in `.env` at your cop
 | `openbot/`            | The platform OpenDuet runs on: [OpenBot](https://github.com/CopilotKit/openbot)'s server, app, worker, each Bot's computer, Docker and Helm files. |
 | `openbot/examples/openduet` | OpenDuet's tenant package: its name, Bots, channels, model and skills.                       |
 | `scripts/`            | `start.sh` and `stop.sh`, which run OpenBot's scripts with this repository's `.env`.               |
-| `docs/`               | What OpenDuet sends as telemetry, and how to turn it off. OpenBot's own documentation is in `openbot/docs`. |
+| `docs/`               | ACP setup and privacy behavior. OpenBot's own documentation is in `openbot/docs`. |
 | `assets/`             | The banner.                                                                                        |
 
 ## Built on OpenBot

@@ -751,7 +751,7 @@ describe("action recording", () => {
 });
 
 describe("OpenTelemetry export", () => {
-  test("audit rows reach an OTLP/HTTP collector tagged with openbot.surface", async () => {
+  test("audit rows stay local even when an OTLP collector is configured", async () => {
     const received: string[] = [];
     const collector = Bun.serve({
       hostname: "127.0.0.1",
@@ -767,7 +767,7 @@ describe("OpenTelemetry export", () => {
     const exporter = createOtelEventExporter({
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `http://127.0.0.1:${collector.port}/v1/logs`,
     });
-    expect(exporter).toBeDefined();
+    expect(exporter).toBeUndefined();
     const remove = addAuditTap((event) => exporter?.emit(event));
     await recordAuditEvent(auditStore, {
       eventType: "computer.action_refused",
@@ -778,10 +778,7 @@ describe("OpenTelemetry export", () => {
     remove();
     await exporter?.shutdown();
     collector.stop(true);
-    expect(received.length).toBeGreaterThan(0);
-    expect(received[0]).toContain("/v1/logs");
-    expect(received.join("")).toContain("openbot.surface");
-    expect(received.join("")).toContain("computer.action_refused");
+    expect(received).toEqual([]);
   });
 });
 

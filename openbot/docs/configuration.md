@@ -69,7 +69,7 @@ at `agent-langgraph` on a laptop.
 | `WORKER_SHARED_SECRET` | unset; `start.sh` uses a fixed local default | The secret the routines worker presents to fire a due routine. Without it the server refuses every handoff, whether or not a worker exists to send one. |
 | `OPENBOT_GENERATIVE_UI` | unset (capability on)               | Set `false` or `0` to stop Bots from answering with generated interfaces. |
 | `OPENBOT_SELF_HOST_BANNER` | unset (banner on)               | Set `false` or `0` to hide the bar offering help self-hosting OpenBot, for everybody. It never shows on a paid Intelligence plan, and each person can also close it for themselves. |
-| `OPENBOT_ACCESSIBILITY_DISABLED` | unset | `true` or `1` stops naming OpenDuet on the analytics the runtime already sends. |
+| `OPENBOT_ACCESSIBILITY_DISABLED` | unset | Legacy option; analytics are disabled in this fork. |
 | `COMPOSIO_API_KEY`   | unset                              | One key for the whole deployment, for the broker that holds people's accounts for a few hundred apps. Unset, there is nothing to connect, nothing to grant and no Composio tool for a Bot to call; what remains is one row that goes nowhere, under **More apps** on the admin Plugins page, naming this variable. See [Composio](plugins/composio.md). |
 
 **`OPENBOT_GENERATIVE_UI`** enables generated interfaces by default: streamed HTML/CSS/JavaScript
@@ -630,22 +630,11 @@ them, including a saved off. See [automatic-learning.md](automatic-learning.md).
 | `OPENBOT_MEMORY_SOURCE_DEFAULTS`         | `false` or `0` stops OpenBot making each app a person connected into a memory source for the Bots they talk to. On otherwise. Existing sources are left as they are. |
 | `OPENBOT_PROACTIVE_DEFAULTS`             | `false` or `0` stops OpenBot switching on background research for the Bots a person talks to. On otherwise. Existing settings are left as they are. |
 
-## OpenTelemetry export
+## Local ACP and telemetry removal
 
-Every audit row is also sent as an OTLP log record over HTTP, so a SIEM or an OpenTelemetry
-Collector receives the same events the **Audit** page shows, as they happen. Each record carries
-`openbot.surface`: `bot`, `identity` or `control_plane`. Export never stops a request: when the
-collector cannot be reached, records are dropped after the SDK's retries, and the row in PostgreSQL
-is still the record.
-
-| Variable                           | Meaning                                                                                                |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | Where log records go, used exactly as written. Takes precedence over the next one.                    |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`      | Collector base URL; OpenBot appends `/v1/logs`. Setting either endpoint switches export on.           |
-| `OTEL_EXPORTER_OTLP_LOGS_HEADERS`  | Headers for the logs endpoint, as `key=value` pairs separated by commas (for a collector's API key).  |
-| `OTEL_EXPORTER_OTLP_HEADERS`       | The same, used when `OTEL_EXPORTER_OTLP_LOGS_HEADERS` is unset.                                        |
-| `OTEL_SERVICE_NAME`                | The `service.name` on every record. Defaults to `openbot`.                                             |
-| `OPENBOT_OTEL_EXPORT`              | `off` turns export off while an endpoint is still set.                                                 |
+See [ACP setup](../../docs/acp.md) for local CLI inference. Desktop analytics and external OTLP
+export have been removed in this fork; vendor analytics are disabled. OTLP endpoint settings are
+ignored, and audit rows remain in PostgreSQL. See [privacy details](../../docs/telemetry.md).
 
 ## Computer and supervisor
 

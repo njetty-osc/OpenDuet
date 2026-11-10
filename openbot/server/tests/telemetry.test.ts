@@ -50,36 +50,15 @@ async function capture(
   }
 }
 
-describe("runtime telemetry", () => {
-  test("names OpenDuet, carries the CLI-issued identity, and is not sampled away", async () => {
-    const sent = await capture();
-    expect(sent).toHaveLength(1);
-    const [event] = sent;
-    expect(event?.url).toBe("https://telemetry.copilotkit.ai/ingest");
-    expect(event?.headers["X-CopilotKit-Telemetry-Id"]).toBe(
-      "test-project-identity",
-    );
-    expect(event?.body.event).toBe("oss.runtime.instance_created");
-    expect(event?.body.global_properties.accessibility_title).toBe("OpenDuet");
-    expect(event?.body.global_properties.sampleRate).toBe(1);
-  });
-
-  test("an explicit sample rate wins over the default", async () => {
-    expect(await capture({ COPILOTKIT_TELEMETRY_SAMPLE_RATE: "0" })).toEqual(
-      [],
-    );
-  });
-
-  test("either opt-out stops every event", async () => {
-    for (const key of ["DO_NOT_TRACK", "COPILOTKIT_TELEMETRY_DISABLED"])
-      for (const value of ["true", "1"])
-        expect(await capture({ [key]: value })).toEqual([]);
-  }, 30_000);
-
-  test("OPENBOT_ACCESSIBILITY_DISABLED leaves the product unnamed", async () => {
-    const [event] = await capture({ PROBE_ACCESSIBILITY: "off" });
-    expect(event?.body.global_properties).not.toHaveProperty(
-      "accessibility_title",
-    );
+describe("runtime telemetry removal", () => {
+  test("sends no events even when inherited settings explicitly enable analytics", async () => {
+    expect(await capture()).toEqual([]);
+    expect(
+      await capture({
+        DO_NOT_TRACK: "0",
+        COPILOTKIT_TELEMETRY_DISABLED: "false",
+        COPILOTKIT_TELEMETRY_SAMPLE_RATE: "1",
+      }),
+    ).toEqual([]);
   });
 });

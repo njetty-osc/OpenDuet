@@ -7,6 +7,6 @@ cd "$(dirname "$0")/.."
 . scripts/env.sh
 link_env
 if [ ! -d openbot/node_modules ]; then
-  bun install --cwd openbot
+  bun install --ignore-scripts --cwd openbot
 fi
 exec bash openbot/scripts/start.sh "$@"

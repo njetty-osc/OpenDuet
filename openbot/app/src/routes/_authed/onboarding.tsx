@@ -313,9 +313,7 @@ function RosterStep() {
  *   and an app connected through Composio or Arcade is held by that service, not here.
  * - Conversations and memory are in Intelligence, named, with where it runs by default.
  * - Every message goes to the model provider this install was set up with.
- * - The CopilotKit runtime sends usage events to CopilotKit unless `DO_NOT_TRACK=1` or
- *   `COPILOTKIT_TELEMETRY_DISABLED=true` is set (`server/src/telemetry.ts`). Naming the variable is
- *   fine here: this step is shown only to a single-user install, whose one reader runs the server.
+ * - Product analytics and external audit telemetry are disabled in this fork.
  *
  * Nothing about sign-in: activating a local install signs you in to CopilotKit, which is its own
  * question and not this step's.
@@ -332,8 +330,8 @@ function LocalStep() {
         unless you host it yourself. What you ask goes to your AI model.
       </p>
       <p className="type-caption mt-3 max-w-md text-center text-duet-ink-3">
-        CopilotKit also receives usage events. Set DO_NOT_TRACK=1 to turn them
-        off.
+        Product analytics and external audit telemetry are disabled in this
+        fork.
       </p>
       <div className="h-8" />
       <CapabilityDemo kind="approval" />

@@ -3,6 +3,7 @@
 # lifecycle. Two Bots in the box rather than one, so "any AG-UI agent is a Bot" is demonstrated by
 # two implementations that share nothing but the protocol.
 FROM oven/bun:1.4-alpine
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 WORKDIR /app
 # The lockfile as well as the manifest: `--frozen-lockfile` with no lockfile present resolves afresh

@@ -1,6 +1,7 @@
 # The built-in Bot only speaks AG-UI and a model provider; the browser runs in a separate computer
 # container so either side can be replaced independently.
 FROM oven/bun:1.4-alpine
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 WORKDIR /app
 RUN chown bun:bun /app

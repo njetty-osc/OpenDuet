@@ -498,7 +498,7 @@ function EnterpriseSections({
       </PageSection>
 
       <PageSection
-        description="Set OTEL_EXPORTER_OTLP_ENDPOINT to stream audit events and Bot actions to your OpenTelemetry collector or SIEM. They are tagged openbot.surface."
+        description="Audit events and recorded actions stay in this deployment. External telemetry export has been removed."
         title="Recording and export"
       >
         <PageRows>
@@ -533,15 +533,12 @@ function EnterpriseSections({
             <ItemContent>
               <ItemTitle>OpenTelemetry export</ItemTitle>
               <ItemDescription>
-                {data.otel.configured
-                  ? "Exporting over OTLP/HTTP."
-                  : "Not set up. Set OTEL_EXPORTER_OTLP_ENDPOINT on the server."}
+                Removed in this fork. Audit records remain in the local
+                database.
               </ItemDescription>
             </ItemContent>
             <ItemActions>
-              <span className="text-muted-foreground text-sm">
-                {data.otel.configured ? "On" : "Off"}
-              </span>
+              <span className="text-muted-foreground text-sm">Off</span>
             </ItemActions>
           </Item>
         </PageRows>

@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { ModelChoice } from "./ProviderPicker";
 
 export type SetupStep =
@@ -79,8 +78,5 @@ export function modelChoiceEvent(
   return null;
 }
 
-export function recordSetupEvent(event: SetupEvent | null): void {
-  if (event === null) return;
-  // Native code owns validation, opt-out, and delivery. Analytics never gate setup.
-  void invoke<void>("record_setup_event", { event }).catch(() => undefined);
-}
+/** Analytics collection and native dispatch are removed in this fork. */
+export function recordSetupEvent(_event: SetupEvent | null): void {}

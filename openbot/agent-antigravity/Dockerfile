@@ -4,6 +4,7 @@
 # `slim` rather than `alpine`: the SDK's wheel bundles a Go `localharness` binary built against
 # glibc (manylinux_2_17), and musl cannot load it.
 FROM python:3.12-slim
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 WORKDIR /app
 

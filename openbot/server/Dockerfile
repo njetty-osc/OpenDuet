@@ -7,6 +7,7 @@
 # Multi-stage so the build's dependencies do not ship. Non-root because nothing here needs to be.
 
 FROM oven/bun:1.4.3 AS deps
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 WORKDIR /app
 
@@ -25,6 +26,7 @@ RUN bun install --frozen-lockfile
 
 
 FROM deps AS app-build
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 # `prebuild` generates the app's config, so the app is built through its own script rather than by
 # calling vite directly, or the generated file is missing and the build fails on an import.
@@ -40,6 +42,7 @@ RUN bun run --cwd app build
 
 
 FROM oven/bun:1.4.3 AS runtime
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 # Not root. The API opens a socket and talks to Postgres; neither needs privileges, and a Chromium
 # container is a separate image with its own reasons.

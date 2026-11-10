@@ -5,8 +5,9 @@
   "private": true,
   "description": "The open-source proactive agent, built on OpenBot. The platform lives in openbot/.",
   "scripts": {
-    "postinstall": "bun install --cwd openbot",
+    "postinstall": "bun install --ignore-scripts --cwd openbot",
     "start": "bash scripts/start.sh",
-    "stop": "bash scripts/stop.sh"
+    "stop": "bash scripts/stop.sh",
+    "acp:smoke": "bun openbot/server/scripts/acp-smoke.ts"
   }
 }

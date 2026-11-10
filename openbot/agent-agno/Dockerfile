@@ -1,6 +1,7 @@
 # Agno, as a Bot. Python rather than Bun because that is what the integration is published in,
 # and the protocol is the only thing a Bot has to share with the others.
 FROM python:3.12-slim
+ENV DO_NOT_TRACK=1 COPILOTKIT_TELEMETRY_DISABLED=true MASTRA_TELEMETRY_DISABLED=true SCARF_ANALYTICS=false ANONYMIZED_TELEMETRY=false CREWAI_TRACING_ENABLED=false LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false
 
 WORKDIR /app
 
