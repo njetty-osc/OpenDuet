@@ -2,3 +2,6 @@
 node_modules/
 .DS_Store
 .copilotkit/
+
+# Private local database and runtime state
+openbot/.local/

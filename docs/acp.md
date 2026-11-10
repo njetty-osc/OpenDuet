@@ -3,6 +3,7 @@
 Set these values in the repository's `.env` (the example defaults to ACP):
 
 ```dotenv
+OPENBOT_CONVERSATION_STORE=local
 OPENBOT_AGENT_MODE=acp
 OPENBOT_ACP_PROVIDER=codex
 OPENBOT_ACP_TIMEOUT_MS=300000
@@ -23,11 +24,19 @@ Optional settings:
 | `OPENBOT_ACP_TIMEOUT_MS` | Positive timeout in milliseconds, including initialization. |
 | `OPENBOT_AGENT_MODE=api` | Use the existing model API transport. |
 
-From the repository root, run `bun install`, then `bash scripts/start.sh`. ACP mode starts the
-computer and database services, API, worker, and app; it skips the model API Bot containers. The
-managed coworker endpoint identifies which registered remote Bot should run in-process through ACP.
-Other remote AG-UI and Mastra Bots retain their explicitly configured endpoints. Built-in Bots use ACP
-through the same resolver as chat, routines, and background work.
+From the repository root, install Bun 1.4+, PostgreSQL 17 and pgvector (`brew install
+postgresql@17 pgvector` on Apple Silicon macOS), then run `bun install --ignore-scripts`
+and `bash scripts/start.sh`. The default local launcher creates a private environment file,
+starts an isolated PostgreSQL cluster on port 55432, applies migrations, and starts the API,
+routine worker, and app. Open http://127.0.0.1:3010. No Docker or Copilot account is required.
+`OPENBOT_POSTGRES_BIN` can name another PostgreSQL bin directory. A configured external
+`DATABASE_URL` is used as supplied. `bash scripts/stop.sh` stops this install without deleting data.
+
+Computer and browser automation remain optional, separately configured services. To use the
+original Compose launcher, set `OPENBOT_DOCKER_START=true`. Its database still supports local
+conversation storage. The managed coworker runs in-process through ACP; other remote AG-UI and
+Mastra Bots retain their configured endpoints. Chat, routines, handoffs, approvals, tasks,
+responsibilities and groups use the same local transcript and agent resolver.
 
 The provider receives a fresh ACP session per run, seeded from OpenDuet's conversation history,
 standing instructions, context, and state. Its MCP server exposes only the run's granted application
@@ -54,7 +63,18 @@ It uses the chosen CLI login and does not require a database or CopilotKit key.
 
 ## Conversation storage
 
-ACP changes inference, not storage. OpenDuet still requires its configured CopilotKit Intelligence
-service and valid project key for durable threads and memory. Its endpoint may be self-hosted;
-the upstream default is hosted. A fully local replacement for that service is not included here.
-The app itself additionally requires PostgreSQL and a container engine for its computer service.
+Local mode persists owner-scoped transcripts, tool receipts and agent state in PostgreSQL.
+The complete transcript survives server restarts; reconnect streams begin with `RUN_STARTED`.
+Database leases exclude competing browser and background turns. User input is saved before
+calling a CLI, and completion is published only after saving the result. Interrupted turns are
+not automatically replayed. Personal memories use the existing local memory tables without
+hosted mirroring or entitlement checks.
+
+Hosted Intelligence, licences and automatic hosted Learning are bypassed in local mode. Packaged
+skills and application tools remain available. Hosted Learning's automatic skill synthesis is
+not supplied by this local replacement. An existing cloud installation can explicitly opt into
+`OPENBOT_CONVERSATION_STORE=intelligence`; only that opt-in requires its credentials.
+
+The provider currently creates a new ACP session per run and seeds it with saved history.
+Provider session reuse and context compaction remain follow-up work; the complete local transcript
+is retained rather than silently truncated.

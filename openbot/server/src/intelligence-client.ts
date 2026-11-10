@@ -1,4 +1,6 @@
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
+import { localConversationsStore } from "./local-conversations";
+import type { LocalConversations } from "./local-conversations";
 import type { IntelligenceSettings } from "./config";
 import {
   clearDesktopConnectionFailure,
@@ -71,7 +73,17 @@ export function observeIntelligenceAuthentication<
  */
 export function createIntelligenceClient(
   settings: IntelligenceSettings,
-): CopilotKitIntelligence {
+): CopilotKitIntelligence;
+export function createIntelligenceClient(
+  settings: undefined,
+): LocalConversations["client"];
+export function createIntelligenceClient(
+  settings: IntelligenceSettings | undefined,
+): CopilotKitIntelligence | LocalConversations["client"];
+export function createIntelligenceClient(
+  settings: IntelligenceSettings | undefined,
+): CopilotKitIntelligence | LocalConversations["client"] {
+  if (!settings) return localConversationsStore().client;
   return observeIntelligenceAuthentication(
     new CopilotKitIntelligence({
       apiUrl: settings.apiUrl,

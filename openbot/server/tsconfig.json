@@ -38,6 +38,8 @@
   "include": [
     "src",
     "tests/acp.test.ts",
+    "tests/local-conversations.test.ts",
+    "../../scripts/local.ts",
     "scripts",
     "../scripts/composio-smoke.ts",
     "tests/store-provider-required.test.ts",

@@ -1,8 +1,4 @@
-/**
- * What the runtime can do. There is exactly one answer because CopilotKit Intelligence is required
- * for durable threads and memory. Configuration the product cannot function without belongs at the
- * boot boundary.
- */
+/** Local persistence is the default; hosted storage requires an explicit opt-in. */
 import {
   isLearningContainerId,
   type LearningTarget,
@@ -27,11 +23,13 @@ import type { BrokerProvider } from "./plugins/access";
 import { type VoiceConfig, voiceConfig } from "./voice/config";
 import { type WebBotAuth, webBotAuthFromEnv } from "./web-bot-auth";
 
-export type RuntimeCapabilities = {
-  mode: "intelligence";
-  durableHistory: true;
-  intelligence: IntelligenceSettings;
-};
+export type RuntimeCapabilities =
+  | { mode: "local"; durableHistory: true; intelligence?: undefined }
+  | {
+      mode: "intelligence";
+      durableHistory: true;
+      intelligence: IntelligenceSettings;
+    };
 
 /**
  * The Intelligence contract. Three values are required; see runtimeCapabilities.
@@ -975,20 +973,13 @@ function oktaAuth(
   return { ...client, issuer };
 }
 
-/**
- * Resolve the Intelligence contract, or refuse to start.
- *
- * The three addressing values are required together. A partial set is the more dangerous shape than
- * none at all: it means somebody intended to configure Intelligence and got it wrong, so failing on
- * the partial set alone (as this did) let a completely unconfigured deployment through as if that
- * were a choice.
- *
- * COPILOTKIT_LICENSE_TOKEN IS NO LONGER ONE OF THEM. Managed Intelligence issues a single project
- * key and derives entitlement from it, and requiring a second credential here sent people hunting
- * for a token the platform had stopped handing out. It is still read and still forwarded when a
- * deployment sets one, which is what a self-hosted Intelligence with its own licence needs.
- */
+/** Local mode ignores hosted credentials. Validate them only for explicit hosted deployments. */
 function runtimeCapabilities(environment: Environment): RuntimeCapabilities {
+  const storage =
+    optional(environment, "OPENBOT_CONVERSATION_STORE") ?? "local";
+  if (storage === "local") return { mode: "local", durableHistory: true };
+  if (storage !== "intelligence")
+    throw new Error("OPENBOT_CONVERSATION_STORE must be local or intelligence");
   const settings = {
     apiUrl: url(environment, "INTELLIGENCE_API_URL"),
     gatewayWsUrl: url(environment, "INTELLIGENCE_GATEWAY_WS_URL"),
@@ -1411,7 +1402,9 @@ export function loadConfig(
       optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/openduet",
     runtime: runtimeCapabilities(environment),
     learning: learningDefault(environment),
-    learningAutoAssign: learningAutoAssignEnabled(environment),
+    learningAutoAssign:
+      optional(environment, "OPENBOT_CONVERSATION_STORE") === "intelligence" &&
+      learningAutoAssignEnabled(environment),
     ...learningSetupCredential(environment),
     memoryDefaults: {
       sources: switchedOn(environment, "OPENBOT_MEMORY_SOURCE_DEFAULTS"),

@@ -184,7 +184,7 @@ identifies_as_openbot() {
     # A field of this server's own payload. A stray 200 does not carry it.
     server)
       curl -fsS --max-time 3 "http://localhost:$port/api/copilotkit/info" 2>/dev/null \
-        | grep -q '"licenseStatus"'
+        | grep -q '"agents"'
       ;;
     # The app is static HTML with nothing to interrogate, so a marker in its head is the identity
     # available. Not the title: a fork that renames the product changes the title with it.
@@ -373,7 +373,7 @@ green "  managed coworker endpoint: $MANAGED_AGENT_AG_UI_URL"
 # happens, and with nothing that can create it the line says exactly what to run.
 LEARNING_CONTAINER="$(setting CPK_INTELLIGENCE_LEARNING_CONTAINER_ID "")"
 LEARNING_AUTO_ASSIGN="$(setting OPENBOT_LEARNING_AUTO_ASSIGN true)"
-if [ -z "$LEARNING_CONTAINER" ] && [ "$LEARNING_AUTO_ASSIGN" != "false" ] \
+if [ "$(setting OPENBOT_CONVERSATION_STORE local)" = "intelligence" ] && [ -z "$LEARNING_CONTAINER" ] && [ "$LEARNING_AUTO_ASSIGN" != "false" ] \
    && [ "$LEARNING_AUTO_ASSIGN" != "0" ] && [ -n "$(setting INTELLIGENCE_API_KEY "")" ]; then
   LEARNING_LINE="$(bun scripts/setup-learning.ts --non-interactive 2>>"$LOGS/learning-setup.log" | tail -1 || true)"
   info "  ${LEARNING_LINE:-Automatic Learning: the container check did not run. Log: $LOGS/learning-setup.log}"
@@ -505,7 +505,7 @@ bun run - "$INFO" <<'JS'
 const info = JSON.parse(process.argv[2]);
 const status = info.licenseStatus;
 const agents = Object.keys(info.agents ?? {});
-if (status !== "valid") {
+if (info.mode === "intelligence" && status !== "valid") {
   console.log(`\x1b[31m  licence is '${status}', not 'valid'.\x1b[0m`);
   console.log("\x1b[31m  Check INTELLIGENCE_API_KEY. From the repository root: npx copilotkit@latest login && npx copilotkit@latest project select && bun openbot/scripts/setup-learning.ts\x1b[0m");
   console.log("\x1b[31m  The Quick start in the repository's README.md has the steps.\x1b[0m");
@@ -515,7 +515,7 @@ if (agents.length === 0) {
   console.log("\x1b[31m  No Bots registered.\x1b[0m");
   process.exit(1);
 }
-console.log(`\x1b[32m  licence valid · mode ${info.mode} · Bots: ${agents.join(", ")}\x1b[0m`);
+console.log(`\x1b[32m  mode ${info.mode} · Bots: ${agents.join(", ")}\x1b[0m`);
 JS
 
 info "4/4  App"

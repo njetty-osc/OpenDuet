@@ -19,7 +19,8 @@ export function testEnvironment(
     BETTER_AUTH_URL: "http://localhost:3001",
     // Required whenever a provider is configured: nothing else grants the administrator role.
     INITIAL_ADMIN_EMAILS: "admin@openbot.test",
-    // Required. See server/src/config.ts: there is no runtime without Intelligence.
+    // Legacy hosted-runtime fixtures opt in explicitly. Local-storage tests override this.
+    OPENBOT_CONVERSATION_STORE: "intelligence",
     INTELLIGENCE_API_URL: "http://localhost:7100",
     INTELLIGENCE_GATEWAY_WS_URL: "ws://localhost:7103",
     INTELLIGENCE_API_KEY: "tenant-api-key",

@@ -1,4 +1,6 @@
 import "./telemetry";
+import { localRuntimeHandler } from "./local-runtime";
+import { localConversationsStore } from "./local-conversations";
 import { AcpAgent } from "./agents/acp-agent";
 import { acpSettings, type AcpSettings } from "./agents/acp-config";
 import { isManagedEndpoint } from "./agents/managed-endpoint";
@@ -8,6 +10,7 @@ import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
 import {
   type CopilotKitIntelligence,
   CopilotRuntime,
+  IntelligenceAgentRunner,
 } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import { PROVENANCE_GUIDANCE } from "@openbot/shared/bot-prompt";
@@ -80,17 +83,9 @@ import { grantedToolGuidance } from "./plugins/tools";
 import { UNTRUSTED_GUIDANCE } from "./untrusted-content";
 
 /**
- * The CopilotKit runtime, always in Intelligence mode.
- *
- * Package-declared built-in Bots run as CopilotKit `BuiltInAgent` instances. External Bots are
- * reached over AG-UI as `HttpAgent` instances, so anything that speaks the protocol remains a Bot
- * with no framework adapter here: LangGraph, Pydantic-AI, CrewAI, Mastra, ADK, or a hand-written
- * server.
- *
- * There is no SSE branch. Intelligence is a requirement of the product, not a tier: it owns
- * durable threads, memory and learning, and a deployment without it silently forgets every
- * conversation. config.ts refuses to boot without the full contract, so by the time this runs the
- * settings are present and this file has one mode.
+ * Request-scoped agents share one resolver across local SSE chat and background work.
+ * Local conversations are durable PostgreSQL rows. The hosted runtime remains an explicit
+ * compatibility path for existing deployments.
  */
 
 /** Resolve the signed-in person for a request. Threads and memory are scoped to whoever this returns. */
@@ -1778,7 +1773,6 @@ export function mountCopilotRuntime(
     learningSettings?: LearningSettingsStore;
   } = {},
 ) {
-  const { intelligence } = config.runtime;
   const { basePath = "/api/copilotkit", onRunBusy, learningSettings } = options;
 
   /**
@@ -1818,6 +1812,34 @@ export function mountCopilotRuntime(
    * One client, used by the runtime and by anything reading a thread beside it, so a hop reads the
    * history a person's run would read rather than a second view of it that could disagree.
    */
+  if (config.runtime.mode === "local") {
+    const local = localConversationsStore();
+    return {
+      handler: localRuntimeHandler(
+        config,
+        resolver,
+        identifyUser,
+        identifyActor,
+        basePath,
+        onRunBusy,
+      ),
+      learning: undefined as LearningRuntime | undefined,
+      createRunner: () => local.runner(undefined, onRunBusy),
+      threadLock: createIntelligenceThreadLock({
+        client: local.client,
+        onRunBusy,
+      }),
+      agentFor,
+      history: async (input: { threadId: string; actorId: string }) =>
+        (
+          await local.client.getThreadMessages({
+            threadId: input.threadId,
+            userId: input.actorId,
+          })
+        ).messages,
+    };
+  }
+  const { intelligence } = config.runtime;
   const intelligenceClient: CopilotKitIntelligence =
     observeIntelligenceAuthentication(
       new IntelligenceKnowingANewThread({
@@ -1900,10 +1922,11 @@ export function mountCopilotRuntime(
      * the token that holds it is not the API key. The runtime asks the client for both, so anything
      * else driving a run has to ask the same client the same way.
      */
-    runnerConnection: () => ({
-      url: intelligenceClient.ɵgetRunnerWsUrl(),
-      authToken: intelligenceClient.ɵgetRunnerAuthToken(),
-    }),
+    createRunner: () =>
+      new IntelligenceAgentRunner({
+        url: intelligenceClient.ɵgetRunnerWsUrl(),
+        authToken: intelligenceClient.ɵgetRunnerAuthToken(),
+      }),
     threadLock: createIntelligenceThreadLock({
       client: intelligenceClient,
       learning,

@@ -17,7 +17,8 @@ an OTLP endpoint no longer exports events. PostgreSQL audit records and local ac
 Third-party dependencies may still contain dormant analytics code; their supported opt-outs are
 forced rather than modifying upstream packages in node_modules.
 
-Conversations and memory still use the configured CopilotKit Intelligence service. Inference uses
-the selected model API or logged-in ACP CLI. Connected services, browser actions, and user-configured
+Conversations and memory use the configured PostgreSQL database in the default local mode.
+No CopilotKit account or hosted service is needed. Inference uses the logged-in ACP CLI,
+which still communicates with its provider, or an explicitly selected model API. Connected services, browser actions, and user-configured
 remote Bots still contact their respective endpoints as part of their functionality. Removing
 analytics does not make those functional services local. See [ACP setup](acp.md).

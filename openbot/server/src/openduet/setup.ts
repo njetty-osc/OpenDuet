@@ -113,6 +113,7 @@ export type SetupChecklist = {
 
 /** What Intelligence said about this deployment. See {@link intelligenceFact}. */
 export type IntelligenceFact =
+  | { state: "local" }
   | { state: "ready" }
   /** It answered, and did not confirm the entitlement. `advice` is the admin's next step. */
   | { state: "refused"; advice: string }
@@ -142,7 +143,8 @@ export type SetupFacts = {
   model: {
     provider: "openai" | "anthropic";
     /** Where the key the Bots answer with comes from, or null when there is none. */
-    source: "plan" | "credential" | "environment" | null;
+    source: "acp" | "plan" | "credential" | "environment" | null;
+    acpProvider?: string;
     verdict: ModelVerdict;
     /** The model the Bots run on, named when the key cannot use it. */
     model: string;
@@ -230,7 +232,10 @@ export function setupRows(
   return [
     deployment({
       id: "intelligence",
-      title: "CopilotKit Intelligence",
+      title:
+        facts.intelligence.state === "local"
+          ? "Local conversation storage"
+          : "CopilotKit Intelligence",
       required: true,
       ...intelligenceRow(facts.intelligence, product),
     }),
@@ -362,6 +367,13 @@ const INTELLIGENCE_VARIABLES = [
  */
 function intelligenceRow(fact: IntelligenceFact, product: string) {
   const readyDetail = `Keeps your conversations and what ${product} remembers.`;
+  if (fact.state === "local")
+    return {
+      status: "ready" as const,
+      readyDetail: "Conversations and memory stay in your local database.",
+      gapDetail: "",
+      fix: null,
+    };
   if (fact.state === "ready")
     return {
       status: "ready" as const,
@@ -390,6 +402,13 @@ function intelligenceRow(fact: IntelligenceFact, product: string) {
 
 /** The model row, from where its key comes from and what the provider last said about that key. */
 function modelRow(model: SetupFacts["model"], product: string) {
+  if (model.source === "acp")
+    return {
+      status: "ready" as const,
+      readyDetail: `Uses your local ${model.acpProvider} CLI through ACP.`,
+      gapDetail: "",
+      fix: null,
+    };
   const provider = PROVIDER_NAME[model.provider];
   const fix: SetupFix = {
     kind: "env",
@@ -654,7 +673,8 @@ export function createSetupSources(input: {
     { outcome: ModelCheckOutcome; stamp: string | null } | undefined
   >;
   /** Intelligence's entitlement answer for this deployment. Asked at creation and on recheck. */
-  entitlements: () => Promise<RuntimeEntitlementResponse>;
+  entitlements?: () => Promise<RuntimeEntitlementResponse>;
+  localAcp?: string;
   plugins: {
     listServers: () => Promise<Array<{ id: string; hasCredential: boolean }>>;
     inspectApp: (input: {
@@ -682,10 +702,14 @@ export function createSetupSources(input: {
     credentials: input.credentials,
     environment: input.environment,
   };
-  const askIntelligence = () =>
-    withinTime(input.entitlements(), INTELLIGENCE_TIMEOUT_MS).then(
-      intelligenceFact,
-    );
+  const askIntelligence = (): Promise<IntelligenceFact> =>
+    input.config.runtime.mode === "local"
+      ? Promise.resolve({ state: "local" })
+      : input.entitlements
+        ? withinTime(input.entitlements(), INTELLIGENCE_TIMEOUT_MS).then(
+            intelligenceFact,
+          )
+        : Promise.resolve({ state: "unreachable" });
 
   const askComputer = async (): Promise<ComputerVerdict> => {
     if (!input.computer) return "needs_setup";
@@ -729,7 +753,8 @@ export function createSetupSources(input: {
         intelligence: intelligenceNow,
         model: {
           provider: input.model.provider,
-          source: key.source,
+          source: input.localAcp ? "acp" : key.source,
+          acpProvider: input.localAcp,
           verdict: modelVerdict(check, key.stamp),
           model: input.model.defaultModel,
         },

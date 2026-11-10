@@ -2,10 +2,9 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { configuredAuthProviders, loadConfig } from "../src/config";
 
-// Intelligence is part of the MINIMUM contract, so it belongs in the base environment every other
-// case builds on. Leaving it out of the base would make most of this file assert the behaviour of a
-// deployment that is not allowed to exist.
+// These legacy configuration tests explicitly select hosted storage. Local defaults are tested separately.
 const baseEnvironment = {
+  OPENBOT_CONVERSATION_STORE: "intelligence",
   DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot",
   KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
@@ -60,9 +59,9 @@ describe("deployment configuration", () => {
     expect(config.singleUser).toBe(false);
     expect(config.auth).toBeUndefined();
     expect(config.organizationAuthUrl).toBe("https://openbot.company.example");
-    expect(config.runtime.intelligence.apiKey).toBe("tenant-api-key");
+    expect(config.runtime.intelligence?.apiKey).toBe("tenant-api-key");
   });
-  test("resolves the Intelligence runtime, which is the only runtime", () => {
+  test("resolves the explicitly selected hosted runtime", () => {
     const config = loadConfig(baseEnvironment);
 
     expect(config.runtime).toEqual({
@@ -129,7 +128,7 @@ describe("deployment configuration", () => {
       throw new Error("expected the Intelligence runtime");
     }
     expect(config.runtime.intelligence.licenseToken).toBeUndefined();
-    expect(config.runtime.intelligence.apiKey).toBe(
+    expect(config.runtime.intelligence?.apiKey).toBe(
       baseEnvironment.INTELLIGENCE_API_KEY,
     );
   });
@@ -148,9 +147,10 @@ describe("deployment configuration", () => {
     );
   });
 
-  test("refuses to start when Intelligence is absent entirely, rather than degrading", () => {
+  test("refuses an explicit hosted selection without its credentials", () => {
     expect(() =>
       loadConfig({
+        OPENBOT_CONVERSATION_STORE: "intelligence",
         DATABASE_URL: baseEnvironment.DATABASE_URL,
         KEY_ENCRYPTION_KEY: baseEnvironment.KEY_ENCRYPTION_KEY,
         MANAGED_AGENT_AG_UI_URL: baseEnvironment.MANAGED_AGENT_AG_UI_URL,

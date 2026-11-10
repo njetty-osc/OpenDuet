@@ -1,3 +1,7 @@
+import {
+  LocalConversations,
+  configureLocalConversations,
+} from "./local-conversations";
 import { stopAcpRuns } from "./agents/acp-agent";
 // First, before anything that imports the CopilotKit runtime: see telemetry.ts.
 import "./telemetry";
@@ -165,10 +169,7 @@ import { githubCallbackRoutes } from "./identity/github-callback";
 import { retireIdentityLinks, retireOwnedAccounts } from "./identity/retire";
 import { slackCodeRedeemer } from "./identity/slack-redeem";
 import { createIdentityStore } from "./identity/store";
-import {
-  createIntelligenceClient,
-  observeIntelligenceAuthentication,
-} from "./intelligence-client";
+import { createIntelligenceClient } from "./intelligence-client";
 import {
   createLearningAutoAssign,
   probeLearningContainer,
@@ -363,6 +364,8 @@ clearLearningRevisionFallback();
 // `serverPort` in config.ts for what `process.env.PORT ?? …` did with `PORT=` instead.
 const port = config.port;
 const database = createDatabase(config.databaseUrl);
+const localConversations = new LocalConversations(database);
+configureLocalConversations(localConversations);
 // Every dispatch point asks this database whether its person paused the Bot. See agents/lifecycle.ts.
 configureBotLifecycle({ database });
 const learningSettingsStore = createLearningSettingsStore(
@@ -370,9 +373,9 @@ const learningSettingsStore = createLearningSettingsStore(
   config.learning,
 );
 // Its own client, like the self-host banner's: the constructor opens nothing.
-const learningProbeIntelligence = createIntelligenceClient(
-  config.runtime.intelligence,
-);
+const learningProbeIntelligence = config.runtime.intelligence
+  ? createIntelligenceClient(config.runtime.intelligence)
+  : undefined;
 /*
  * Who can create the `openbot` container here: never the runtime key. A service token the operator
  * configured (local evaluation installs), or a CopilotKit CLI login on this machine, which is what a
@@ -380,7 +383,9 @@ const learningProbeIntelligence = createIntelligenceClient(
  */
 const learningApiOrigin = (() => {
   try {
-    return intelligenceApiOrigin(config.runtime.intelligence.apiUrl);
+    return config.runtime.intelligence
+      ? intelligenceApiOrigin(config.runtime.intelligence.apiUrl)
+      : undefined;
   } catch {
     return undefined;
   }
@@ -392,7 +397,9 @@ const learningAutoAssign = createLearningAutoAssign({
   enabled: config.learningAutoAssign,
   store: learningSettingsStore,
   probe: (containerId) =>
-    probeLearningContainer(learningProbeIntelligence, containerId),
+    learningProbeIntelligence
+      ? probeLearningContainer(learningProbeIntelligence, containerId)
+      : Promise.resolve("unavailable" as const),
   ...(learningApiOrigin
     ? { instructions: learningSetupInstructions(learningApiOrigin) }
     : {}),
@@ -405,8 +412,8 @@ const learningAutoAssign = createLearningAutoAssign({
             nonInteractive: true,
             key: keyIntelligence(
               learningApiOrigin,
-              config.runtime.intelligence.apiKey,
-              config.runtime.intelligence.gatewayWsUrl,
+              config.runtime.intelligence?.apiKey ?? "",
+              config.runtime.intelligence?.gatewayWsUrl ?? "",
             ),
             cliLogin: cliLoginPresent(),
             ...(config.learningSetup
@@ -724,27 +731,10 @@ const chooseSkills = createModelCompleter({
     }),
 });
 
-/*
- * The pair a headless turn is driven through, built ONCE.
- *
- * Not the runtime's own pair: `mountCopilotRuntime` keeps its client and its runner inside
- * `CopilotRuntime` and hands neither back, and reaching into that object would be a worse seam than
- * building our own from the same three settings. Built from `config.runtime.intelligence`, which is
- * required and not optional — `RuntimeCapabilities` has exactly one mode and every Intelligence field
- * with it (`config.ts:10-22`), and `loadConfig` refuses to boot without them — so there is no
- * not-in-Intelligence-mode branch to write here. If a second mode is ever added, THIS is the line that
- * has to grow a guard, and the routine runner must then be left off `createApp` entirely.
- *
- * One runner for the process, reused across firings: it opens a socket per run and holds no idle
- * connection, but its `threads` map is per instance, and a runner per turn would fragment the
- * already-running check that keeps two turns off one thread. See `toolkit/run-turn.ts`.
- */
-const routineIntelligence = observeIntelligenceAuthentication(
-  new CopilotKitIntelligence({
-    apiUrl: config.runtime.intelligence.apiUrl,
-    wsUrl: config.runtime.intelligence.gatewayWsUrl,
-    apiKey: config.runtime.intelligence.apiKey,
-  }),
+// Browser and background work read the same owner-scoped durable conversations.
+// This factory constructs a hosted SDK only when the deployment explicitly selected it.
+const routineIntelligence = createIntelligenceClient(
+  config.runtime.intelligence,
 );
 const approvalComputerTools = async (
   ownerUserId: string,
@@ -1259,18 +1249,20 @@ const intentRouter = createIntentRouter({
 // for that key and say "not checked yet" for any other. The checklist's "Check again" asks again
 // through the same function. Never rejects: a failed read reads as not checked.
 const checkModelAvailability = () =>
-  reportModelAvailability({
-    provider: runtimeModel.provider,
-    model: runtimeModel.defaultModel,
-    apiKey: () =>
-      resolveModelApiKey({
-        encryptionKey: config.keyEncryptionKey,
-        reader: credentialStore,
+  runtimeModel.acp
+    ? Promise.resolve({ kind: "skipped" as const })
+    : reportModelAvailability({
         provider: runtimeModel.provider,
-        keyId: tenantPackage.model.credentialSecretRef,
-        environment: process.env,
-      }),
-  });
+        model: runtimeModel.defaultModel,
+        apiKey: () =>
+          resolveModelApiKey({
+            encryptionKey: config.keyEncryptionKey,
+            reader: credentialStore,
+            provider: runtimeModel.provider,
+            keyId: tenantPackage.model.credentialSecretRef,
+            environment: process.env,
+          }),
+      });
 const modelCheckAtBoot = (async () => {
   const { stamp } = await modelKeyOf({
     plan: Boolean(runtimeModel.plan),
@@ -1306,11 +1298,16 @@ const hostAccessBroker = createHostAccessBroker(Date.now, {
 // Memory lives in CopilotKit Intelligence when this deployment is entitled to it, and in OpenBot's own
 // tables when it is not; see memory/store.ts. Its own client, like the thread reader's: the
 // constructor opens nothing.
-const personalMemoryStore = createMemoryStore(database, {
-  intelligence: createIntelligenceMemory({
-    client: createIntelligenceClient(config.runtime.intelligence),
-  }),
-});
+const personalMemoryStore = createMemoryStore(
+  database,
+  config.runtime.intelligence
+    ? {
+        intelligence: createIntelligenceMemory({
+          client: createIntelligenceClient(config.runtime.intelligence),
+        }),
+      }
+    : {},
+);
 const demonstrationStore = createDemonstrationStore(database);
 const demonstrationRecorder = createDemonstrationRecorder({
   store: demonstrationStore,
@@ -1753,10 +1750,19 @@ const buildAgentFor = async ({
   }
   return agent;
 };
-const routineAgentRunner = new IntelligenceAgentRunner({
-  url: routineIntelligence.ɵgetRunnerWsUrl(),
-  authToken: routineIntelligence.ɵgetRunnerAuthToken(),
-});
+const routineAgentRunner =
+  config.runtime.mode === "local"
+    ? localConversations.runner()
+    : new IntelligenceAgentRunner({
+        url:
+          routineIntelligence instanceof CopilotKitIntelligence
+            ? routineIntelligence.ɵgetRunnerWsUrl()
+            : "",
+        authToken:
+          routineIntelligence instanceof CopilotKitIntelligence
+            ? routineIntelligence.ɵgetRunnerAuthToken()
+            : "",
+      });
 
 const routineRunner = createRoutineRunner({
   routineStore,
@@ -2533,15 +2539,16 @@ auditRoutineStore(routineStore, bootAuditStore);
 
 // Asked only whether this deployment pays for Intelligence, for the self-host banner. Its own client
 // rather than the runtime's, the same as the thread reader: the constructor opens nothing.
-const selfHostBannerIntelligence = createIntelligenceClient(
-  config.runtime.intelligence,
-);
+const selfHostBannerIntelligence = config.runtime.intelligence
+  ? createIntelligenceClient(config.runtime.intelligence)
+  : undefined;
 
 // Said once, at boot, whether Intelligence will let this deployment use what it is licensed for. A
 // self-hosted Intelligence without a licence refuses memory quietly; this is the line that says why.
-void reportIntelligenceEntitlement({
-  entitlements: () => selfHostBannerIntelligence.getRuntimeEntitlements(),
-});
+if (selfHostBannerIntelligence)
+  void reportIntelligenceEntitlement({
+    entitlements: () => selfHostBannerIntelligence.getRuntimeEntitlements(),
+  });
 
 const identityGithubCallback =
   config.githubApp && config.publicUrl
@@ -2739,7 +2746,10 @@ const app = createApp(
         },
         credentials: credentialStore,
         modelCheckAtBoot,
-        entitlements: () => selfHostBannerIntelligence.getRuntimeEntitlements(),
+        localAcp: runtimeModel.acp?.acpProvider,
+        entitlements: selfHostBannerIntelligence
+          ? () => selfHostBannerIntelligence.getRuntimeEntitlements()
+          : undefined,
         plugins: pluginStore,
         primaryBot: primaryBotIdOf(
           tenantPackage.agents.map((agent) => agent.id),
@@ -2783,10 +2793,12 @@ const app = createApp(
       auditStore: bootAuditStore,
     },
   },
-  createSelfHostBanner({
-    enabled: config.selfHostBanner,
-    entitlements: () => selfHostBannerIntelligence.getRuntimeEntitlements(),
-  }),
+  selfHostBannerIntelligence
+    ? createSelfHostBanner({
+        enabled: config.selfHostBanner,
+        entitlements: () => selfHostBannerIntelligence.getRuntimeEntitlements(),
+      })
+    : { shown: async () => false },
 
   identityStore,
   identityGithubCallback,
@@ -2835,6 +2847,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     groupSweep.stop();
     for (const sweep of deliverySweeps) sweep.stop();
     void Promise.allSettled([
+      localConversations.stop(),
       stopAcpRuns(),
       channelActivityListener.stop(),
       policyListener.stop(),

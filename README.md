@@ -14,7 +14,7 @@ Built on [OpenBot](https://github.com/CopilotKit/openbot) and [CopilotKit](https
 
  **Each agent has a computer of its own. Use it on the web, on mobile, in Slack, or in Microsoft Teams.**
 
-Host OpenDuet yourself and choose your own model. Requires a free [CopilotKit Intelligence](https://docs.copilotkit.ai) project for threads and memory. Everything that makes it OpenDuet lives in [one folder](#make-it-your-own), so copy it and make it your own.
+Host OpenDuet yourself and choose your own model. The local ACP mode stores conversations and memory in PostgreSQL and uses your existing Codex, Claude Code or Kiro CLI login. No CopilotKit key is needed. Everything that makes it OpenDuet lives in [one folder](#make-it-your-own), so copy it and make it your own.
 
 **OpenDuet is now available as a UX skin in [OpenBot](https://github.com/CopilotKit/OpenBot)**, a more robust version with sign-in, per-Bot permissions and an audit trail, maintained by CopilotKit. This repo stays a community-maintained starter for building your own project.
 
@@ -88,7 +88,7 @@ Everything below works today when you run this repository.
 | A computer of its own        | Keeps working in its own browser, `/workspace`, and shell while you are away. |
 | Asks before it acts          | A reviewer checks every action that changes something, and the ones that matter pause for **Refuse**, **Allow once**, or **Always allow**. A message to other people always asks, once, showing who it goes to and what it says. Anything you type while it carries an action out waits its turn and is answered after. Every action is checked against policy and recorded. |
 | Never sees your passwords    | Logins go through a masked secret box. Saved credentials are encrypted and write-only. |
-| Memory                       | Threads and memory carry over through CopilotKit Intelligence. |
+| Memory                       | Threads and memory persist in the local PostgreSQL database. |
 | Skills                       | Reusable instructions you write once and call with `/`. |
 | Gmail and Google Calendar    | Each person connects their own account. OpenDuet reads mail and today's calendar, and sends a reply only after you answer. |
 | Connected apps               | Governed MCP connectors, including Google Drive and Notion. |
@@ -98,7 +98,7 @@ Everything below works today when you run this repository.
 | What needs you, what can wait | Sorts new mail into what needs you and what can wait, with a one-line reason for each. Measured on a labelled set in [`evals/triage`](evals/triage). |
 | Morning brief                | The first time you open Chat each day after your first, it is already there: what needs you and why, what can wait, today's calendar, and anything it could not check, posted once a day however many tabs or devices you open. You can also ask for it any time. **Start** on a row that needs you hands that email to OpenDuet. |
 | Tasks                        | One tab for what needs you, answered right there, what OpenDuet suggests from its background research, and what it is working on. Its newest suggestion also waits above Chat's composer, with **Start** and **Hide**. A suggestion you start stays in view: under **Working** while OpenDuet works, then **Ready for review** or **Needs input** with OpenDuet's next step, opening at its own message. Answer it in Chat, on its card or by deciding its approval, and it goes back to **Working** until OpenDuet replies. A run that fails says why, with **Try again** where running it again can help. Check one off and it folds into **Resolved**. |
-| Setup checklist              | Onboarding asks you to connect Gmail and Calendar and to turn on notifications, each with **Not now**, then ends on a list of what OpenDuet depends on: Intelligence, the model key, Google, your Gmail and Calendar, notifications, and the optional extras. Each is **Ready**, **Not checked** or **Needs setup**, from the real answer, with how to fix it. **Check again** asks Intelligence and the model provider again. **Settings → Setup** opens it again. |
+| Setup checklist              | Onboarding asks you to connect Gmail and Calendar and to turn on notifications, each with **Not now**, then ends on a list of what OpenDuet depends on: local storage, the ACP CLI, Google, your Gmail and Calendar, notifications, and the optional extras. Each is **Ready**, **Not checked** or **Needs setup**, from the real answer, with how to fix it. **Check again** refreshes the configured services. **Settings → Setup** opens it again. |
 | Gets to know you             | On your first day it speaks first: it greets you, reads your recent mail and this week's calendar, then answers in three short bubbles (who you are, three ways it can help, and an invitation to correct it), with **Sounds right** and **Something's off** to tap. With Gmail and Calendar not connected, it promises no mail: it says what it can do now and shows the card to connect them. |
 | Make                         | Ask for a design system, a design, a dashboard, slides, a doc or a web page, or pick one from the **+** on the Make tab, and OpenDuet makes it. A card in Chat opens it, and Make keeps everything it made as thumbnails you can filter by kind. |
 | Channels                     | Make a channel for a piece of work: a name, an icon in a colour, and what it is for. OpenDuet says hello there and offers three things it could start on, keeps the work there about that purpose, and the tasks it starts there wear the channel's colour. Everything stays your one thread, and the menu lists your channels with Archived folded under them. |
@@ -108,51 +108,27 @@ Everything below works today when you run this repository.
 
 ## Quick start
 
-You will need Docker, [Bun](https://bun.sh) 1.3 or newer, Node (for `npx`, which runs the CopilotKit CLI), a model key, and a CopilotKit Intelligence project. **Intelligence is required**: it keeps OpenDuet's threads and memory, and the server will not start without its key. The free Developer plan is enough.
+You need [Bun](https://bun.sh) 1.4 or newer, PostgreSQL with pgvector, and a logged-in
+Codex, Claude Code or Kiro CLI. No CopilotKit account, model API key, or Docker is needed for chat.
 
-Run every command in this section from the repository root.
-
-```sh
-git clone https://github.com/CopilotKit/OpenDuet.git
-cd OpenDuet
-cp .env.example .env
-bun install
-```
-
-Sign in and pick an Intelligence project:
+Run from the repository root:
 
 ```sh
-npx --yes copilotkit@latest login
-npx --yes copilotkit@latest project select
-bun openbot/scripts/setup-learning.ts
-```
-
-`project select` writes the project's key to `.env` as `CPK_INTELLIGENCE_API_KEY`, its telemetry ID as `CPK_TELEMETRY_ID`, and your choice to `.copilotkit/project.json`. The server reads `INTELLIGENCE_API_KEY`, not `CPK_INTELLIGENCE_API_KEY`, so the last command finishes the job. It makes sure the project has an `openbot` Learning container, creating one if it does not (see [Automatic Learning](openbot/docs/automatic-learning.md)), then copies the key to `INTELLIGENCE_API_KEY` and sets `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID=openbot`. It reads `.env` and `.copilotkit/` from the directory it runs in, which is why it runs here and not from `openbot/`. If `.env` already has an `INTELLIGENCE_API_KEY`, it keeps it and only checks that the container exists.
-
-Put your model key in `.env`. The OpenDuet Bot runs OpenAI's `gpt-5.6-terra`, set in `openbot/examples/openduet/model.yaml`, so by default that is:
-
-```sh
-OPENAI_API_KEY=sk-...
-```
-
-To use another provider or model:
-
-- **Another OpenAI model.** Change `default_model` in `openbot/examples/openduet/model.yaml`, or in your copy of it (see [Make it your own](#make-it-your-own)). `BOT_MODEL` does not change an OpenAI model on its own. It is used only when `OPENAI_BASE_URL` is also set to an OpenAI-compatible endpoint, and then it names the model that endpoint serves.
-- **Anthropic.** Set `BOT_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...`. The model is `BOT_MODEL` if you set one, such as `BOT_MODEL=claude-sonnet-5-5`, and `claude-sonnet-4-5` if you do not.
-
-Set these before you start it. **Settings → Setup** in the app says whether the model key works.
-
-Then start it:
-
-```sh
+brew install postgresql@17 pgvector
+bun install --ignore-scripts
 bash scripts/start.sh
 ```
 
-and open <http://localhost:3010>. The script starts Postgres and each Bot's computer in Docker, applies the database migrations, and starts the API server, the routine worker, and the app. It checks that each one answers before it prints the next steps. `bash scripts/stop.sh` stops the app, the worker, the API server and the Docker services, and removes the Bot computers that belong to this install, the ones with its `COMPUTER_NAMESPACE`. It does not touch another install's. The database, each Bot's files and its browser profile are Docker volumes, so they stay. Add `--keep-computers` to leave the Bot computers running.
+Open <http://127.0.0.1:3010>. The launcher creates a private local environment, starts PostgreSQL
+on port 55432, applies migrations, and runs the API, routine worker and app. Conversations, memory,
+tasks, approvals and settings persist locally. `bash scripts/stop.sh` stops this install and retains
+your data. Select `OPENBOT_ACP_PROVIDER=claude` or `kiro` in `openbot/.env` before restarting to
+change the CLI; the default is Codex. [ACP setup and limits](docs/acp.md).
 
-If port 5432 is already taken on your machine, set `POSTGRES_PORT` in `.env` to a free port and change the port in `DATABASE_URL` to match.
-
-For a shared Bot computer, set `OPENBOT_ONE_COMPUTER_EACH=false`, leave `COMPUTER_SUPERVISOR_URL` empty, and point `AGENT_COMPUTER_URL` at `http://localhost:<COMPUTER_PORT>` (4100 by default). The API and the `agent-computer` Compose service must use the same nonempty `COMPUTER_TOKEN`. Start through `bash scripts/start.sh` to keep them in agreement; it writes the resolved token into `.env` so a later direct Bun restart keeps it. If you change the token, rerun the start script and restart any API processes launched manually. For a computer per Bot, keep `OPENBOT_ONE_COMPUTER_EACH=true`: the supervisor owns those containers and their assigned ports; do not point `AGENT_COMPUTER_URL` at a remembered random port.
+Computer automation, connected apps, voice and external Bots need their own optional services.
+The original Docker launcher is available with `OPENBOT_DOCKER_START=true`. Hosted Intelligence
+is an explicit compatibility option with `OPENBOT_CONVERSATION_STORE=intelligence`, rather
+than a requirement of local ACP mode.
 
 To run a second install beside another on one machine, give it its own `COMPOSE_PROJECT_NAME`, `COMPUTER_NAMESPACE`, image tags (`COMPUTER_IMAGE` and the other `*_IMAGE` settings), and a value for every `*_PORT`. Change the addresses built from those ports to match: `DATABASE_URL`, `AGENT_COMPUTER_URL`, `MANAGED_AGENT_AG_UI_URL`, `OPENBOT_PUBLIC_URL` and `TRUSTED_ORIGINS`. If both use the same Intelligence project, give it its own `DEPLOYMENT_ID` too. [openbot/docs/configuration.md](openbot/docs/configuration.md#ports) lists them. Two installs can instead share one computer, if they use the same token.
 
@@ -247,7 +223,7 @@ Agent   (any AG-UI agent, on a framework or hand-written)
         ▼
 Its own computer   Chromium · /workspace · shell
 
-CopilotKit Intelligence   threads and memory
+Local PostgreSQL         threads and memory
 PostgreSQL + pgvector     policy, approvals, audit, encrypted credentials
 MCP connectors            Google Drive, Notion, and more through Composio
 ```
@@ -266,7 +242,7 @@ MCP connectors            Google Drive, Notion, and more through Composio
 
 **What leaves.** OpenBot treats any tool it cannot positively classify as a read as a write, and redacts secrets from its audit trail. A message to other people always asks first, showing who it goes to and what it says.
 
-**Memory.** Threads and memory live in [CopilotKit Intelligence](https://docs.copilotkit.ai), so conversations survive restarts and what it has learned about you carries over. You can see what it remembers about you, and tell it facts directly.
+**Memory.** Threads and memory live in this install's PostgreSQL database, so conversations survive restarts and what it has learned about you carries over. You can see what it remembers about you, and tell it facts directly.
 
 **Skills and connectors.** Skills are instructions you write once and call with `/`. Connected apps are governed MCP servers: Google Drive and Notion ship in OpenBot's catalogue, and Composio brokers more. A connector is granted to an agent before it can be used.
 

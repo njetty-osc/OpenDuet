@@ -505,6 +505,7 @@ export function createApp(
   app.get("/api/capabilities", async (context) =>
     context.json({
       mode: config.runtime.mode,
+      localStorage: config.runtime.mode === "local",
       durableHistory: config.runtime.durableHistory,
       /*
        * Whether a Bot may answer with an interface it wrote itself.
